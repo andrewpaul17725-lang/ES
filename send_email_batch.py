@@ -12,10 +12,10 @@ BODY_FILE = 'email_body.html'
 RECIPIENTS_FILE = 'recipients.txt'
 STATE_FILE = 'state.txt'
 FAILED_EMAILS_FILE = 'failed_emails.txt'
-# BATCH_SIZE ab istemal nahi hoga, kyunke logic badal gaya hai
 EMAILS_PER_RUN = 11  # 1 'To' + 10 'BCC'
 
 def is_valid_email(email):
+    """Email ke format ko validate karta hai."""
     regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(regex, email) is not None
 
@@ -59,21 +59,17 @@ def send_email_batch():
     # --- NAYA LOGIC: 'To' aur 'BCC' recipients ko select karna ---
     total_recipients = len(all_recipients)
     
-    # Check karna ke kya list mein bhejne ke liye emails baaqi hain
     if last_index >= total_recipients:
         print("::info::All recipients have been processed. Resetting to start from the beginning.")
         last_index = 0
 
-    # 'To' ke liye email select karna
     to_recipient_index = last_index % total_recipients
     to_recipient = all_recipients[to_recipient_index]
     
-    # 'BCC' ke liye agle 10 emails select karna
     bcc_recipients = []
-    for i in range(1, EMAILS_PER_RUN): # 1 se 10 tak ka loop
-        bcc_index = (last_index + i) % total_recipients
-        # Yeh check zaroori hai taake 'To' wala email dobara BCC mein na aaye
-        if bcc_index != to_recipient_index:
+    for i in range(1, EMAILS_PER_RUN):
+        bcc_index = (last_index + i)
+        if bcc_index < total_recipients:
             bcc_recipients.append(all_recipients[bcc_index])
 
     print(f"Preparing to send email TO: {to_recipient}")
@@ -82,6 +78,10 @@ def send_email_batch():
     # --- Step 3: SMTP server se connect karna ---
     try:
         server = smtplib.SMTP(smtp_server, smtp_port)
+        # --- DEBUGGING LINE ---
+        # Yeh server se hone wali tamam बातचीत ko logs mein print karega
+        server.set_debuglevel(1)
+        # --------------------
         server.starttls()
         server.login(sender_email, password)
         print("Successfully connected to SMTP server.")
@@ -91,9 +91,7 @@ def send_email_batch():
 
     # --- Step 4: Email bhejna ---
     failed_recipients = []
-    email_sent = False
-
-    # 'To' aur 'BCC' emails ko validate karna
+    
     valid_targets = []
     if is_valid_email(to_recipient):
         valid_targets.append(to_recipient)
@@ -114,19 +112,17 @@ def send_email_batch():
 
         message = MIMEMultipart()
         message["From"] = sender_email
-        message["To"] = to_recipient # 'To' field mein sirf ek email
-        message["Bcc"] = ", ".join(bcc_recipients) # 'Bcc' field mein baaqi 10
+        message["To"] = to_recipient
+        message["Bcc"] = ", ".join(bcc_recipients)
         message["Subject"] = subject
         message.attach(MIMEText(body, "html", "utf-8"))
 
         try:
             print("Sending the email...")
             server.sendmail(sender_email, valid_targets, message.as_string())
-            email_sent = True
             print("Email sent successfully to 1 'To' and", len(bcc_recipients), "'BCC' recipients.")
         except Exception as e:
             print(f"::error::Failed to send email batch: {e}")
-            # Agar batch fail hota hai to sab ko failed list mein daalna
             failed_recipients.extend(valid_targets)
     
     server.quit()
@@ -139,7 +135,6 @@ def send_email_batch():
         print(f"Saved {len(failed_recipients)} failed or invalid recipients.")
 
     # --- Step 6: State file ko update karna ---
-    # Index ko hamesha 11 se aagey barhana, chahe email fail ho ya pass
     next_index = last_index + EMAILS_PER_RUN
     with open(STATE_FILE, 'w') as f:
         f.write(str(next_index))
