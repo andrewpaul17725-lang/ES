@@ -12,7 +12,8 @@ BODY_FILE = 'email_body.html'
 RECIPIENTS_FILE = 'recipients.txt'
 STATE_FILE = 'state.txt'
 FAILED_EMAILS_FILE = 'failed_emails.txt'
-EMAILS_PER_RUN = 11  # 1 'To' + 10 'BCC'
+EMAILS_PER_RUN = 4  # 1 'To' + 3 'BCC'
+
 
 def is_valid_email(email):
     """Email ke format ko validate karta hai."""
